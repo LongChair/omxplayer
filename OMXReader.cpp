@@ -106,7 +106,7 @@ static offset_t dvd_file_seek(void *h, offset_t pos, int whence)
     return pFile->Seek(pos, whence & ~AVSEEK_FORCE);
 }
 
-bool OMXReader::Open(std::string filename, bool dump_format, bool live /* =false */)
+bool OMXReader::Open(std::string filename, bool dump_format)
 {
   if (!m_dllAvUtil.Load() || !m_dllAvCodec.Load() || !m_dllAvFormat.Load())
     return false;
@@ -219,9 +219,6 @@ bool OMXReader::Open(std::string filename, bool dump_format, bool live /* =false
   if(/*m_bAVI || */m_bMatroska)
     m_pFormatContext->max_analyze_duration = 0;
 
-  if (live)
-    m_pFormatContext->flags |= AVFMT_FLAG_NOBUFFER;
-
   result = m_dllAvFormat.avformat_find_stream_info(m_pFormatContext, NULL);
   if(result < 0)
   {
@@ -256,6 +253,95 @@ bool OMXReader::Open(std::string filename, bool dump_format, bool live /* =false
 
   UpdateCurrentPTS();
 
+  m_open        = true;
+
+  return true;
+}
+
+bool OMXReader::OpenContext(AVFormatContext *context, bool dump_format)
+{
+  if (!m_dllAvUtil.Load() || !m_dllAvCodec.Load() || !m_dllAvFormat.Load())
+    return false;
+  
+  m_iCurrentPts = DVD_NOPTS_VALUE;
+  m_filename    = ""; 
+  m_speed       = DVD_PLAYSPEED_NORMAL;
+  m_program     = UINT_MAX;
+  const AVIOInterruptCB int_cb = { interrupt_cb, NULL };
+
+  ClearStreams();
+
+  m_dllAvFormat.av_register_all();
+  m_dllAvFormat.avformat_network_init();
+  m_dllAvUtil.av_log_set_level(dump_format ? AV_LOG_INFO:AV_LOG_QUIET);
+
+  int           result    = -1;
+  AVInputFormat *iformat  = NULL;
+  unsigned char *buffer   = NULL;
+  unsigned int  flags     = READ_TRUNCATED | READ_BITRATE | READ_CHUNKED;
+printf("defs\n");
+    m_ioContext = context->pb;
+printf("1\n");
+printf("2\n");
+    m_pFormatContext     = context;
+printf("3\n");
+    result = 0;
+   if(result < 0)
+    {
+      Close();
+      return false;
+    }
+printf("open input\n");
+  // set the interrupt callback, appeared in libavformat 53.15.0
+  context->interrupt_callback = int_cb;
+
+  m_bMatroska = strncmp(context->iformat->name, "matroska", 8) == 0; // for "matroska.webm"
+  m_bAVI = strcmp(context->iformat->name, "avi") == 0;
+
+  // if format can be nonblocking, let's use that
+  context->flags |= AVFMT_FLAG_NONBLOCK;
+
+  // analyse very short to speed up mjpeg playback start
+  if (context->iformat && (strcmp(context->iformat->name, "mjpeg") == 0) /*&& m_ioContext->seekable == 0*/)
+    m_pFormatContext->max_analyze_duration = 500000;
+
+  if(/*m_bAVI || */m_bMatroska)
+    context->max_analyze_duration = 0;
+
+  result = m_dllAvFormat.avformat_find_stream_info(context, NULL);
+  if(result < 0)
+  {
+    Close();
+    return false;
+  }
+printf("find streams info\n");
+  if(!GetStreams())
+  {
+    Close();
+    return false;
+  }
+printf("get streams\n");
+  if(m_pFile)
+  {
+    int64_t len = m_pFile->GetLength();
+    int64_t tim = GetStreamLength();
+
+    if(len > 0 && tim > 0)
+    {
+      unsigned rate = len * 1000 / tim;
+      unsigned maxrate = rate + 1024 * 1024 / 8;
+      if(m_pFile->IoControl(IOCTRL_CACHE_SETRATE, &maxrate) >= 0)
+        CLog::Log(LOGDEBUG, "COMXPlayer::OpenFile - set cache throttle rate to %u bytes per second", maxrate);
+    }
+  }
+
+  m_speed       = DVD_PLAYSPEED_NORMAL;
+
+  if(dump_format)
+    m_dllAvFormat.av_dump_format(context, 0, "", 0);
+
+  UpdateCurrentPTS();
+printf("update current pts\n");
   m_open        = true;
 
   return true;
@@ -820,7 +906,6 @@ bool OMXReader::GetHints(AVStream *stream, COMXStreamInfo *hints)
   hints->width         = stream->codec->width;
   hints->height        = stream->codec->height;
   hints->profile       = stream->codec->profile;
-  hints->orientation   = 0;
 
   if(stream->codec->codec_type == AVMEDIA_TYPE_VIDEO)
   {
@@ -851,9 +936,6 @@ bool OMXReader::GetHints(AVStream *stream, COMXStreamInfo *hints)
       hints->aspect = 0.0f;
     if (m_bAVI && stream->codec->codec_id == CODEC_ID_H264)
       hints->ptsinvalid = true;
-    AVDictionaryEntry *rtag = m_dllAvUtil.av_dict_get(stream->metadata, "rotate", NULL, 0);
-    if (rtag)
-      hints->orientation = atoi(rtag->value);
   }
 
   return true;
@@ -1289,7 +1371,7 @@ bool OMXReader::CanSeek()
   if(m_ioContext)
     return m_ioContext->seekable;
 
-  if(!m_pFormatContext || !m_pFormatContext->pb)
+  if(!m_pFormatContext)
     return false;
 
   if(m_pFormatContext->pb->seekable == AVIO_SEEKABLE_NORMAL)

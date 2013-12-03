@@ -130,7 +130,8 @@ private:
 public:
   OMXReader();
   ~OMXReader();
-  bool Open(std::string filename, bool dump_format, bool live = false);
+  bool Open(std::string filename, bool dump_format);
+  bool OpenContext(AVFormatContext *context, bool dump_format);
   void ClearStreams();
   bool Close();
   //void FlushRead();
