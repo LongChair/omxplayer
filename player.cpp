@@ -83,40 +83,11 @@ extern "C" {
 #include "Srt.h"
 
 #include <string>
-#include <iostream>
 #include <utility>
 
 #include "version.h"
 #include "API.h"
 #include "player.h"
-
-static float get_display_aspect_ratio(HDMI_ASPECT_T aspect)
-{
-  float display_aspect;
-  switch (aspect) {
-    case HDMI_ASPECT_4_3:   display_aspect = 4.0/3.0;   break;
-    case HDMI_ASPECT_14_9:  display_aspect = 14.0/9.0;  break;
-    case HDMI_ASPECT_16_9:  display_aspect = 16.0/9.0;  break;
-    case HDMI_ASPECT_5_4:   display_aspect = 5.0/4.0;   break;
-    case HDMI_ASPECT_16_10: display_aspect = 16.0/10.0; break;
-    case HDMI_ASPECT_15_9:  display_aspect = 15.0/9.0;  break;
-    case HDMI_ASPECT_64_27: display_aspect = 64.0/27.0; break;
-    default:                display_aspect = 16.0/9.0;  break;
-  }
-  return display_aspect;
-}
-
-static float get_display_aspect_ratio(SDTV_ASPECT_T aspect)
-{
-  float display_aspect;
-  switch (aspect) {
-    case SDTV_ASPECT_4_3:  display_aspect = 4.0/3.0;  break;
-    case SDTV_ASPECT_14_9: display_aspect = 14.0/9.0; break;
-    case SDTV_ASPECT_16_9: display_aspect = 16.0/9.0; break;
-    default:               display_aspect = 4.0/3.0;  break;
-  }
-  return display_aspect;
-}
 
 OMXPlayer::OMXPlayer()
 {
@@ -165,6 +136,34 @@ void OMXPlayer::TeardownOmx()
 
 		_omxPrepped = false;
 	}
+}
+
+float OMXPlayer::GetDisplayAspectRatio(HDMI_ASPECT_T aspect)
+{
+  float display_aspect;
+  switch (aspect) {
+    case HDMI_ASPECT_4_3:   display_aspect = 4.0/3.0;   break;
+    case HDMI_ASPECT_14_9:  display_aspect = 14.0/9.0;  break;
+    case HDMI_ASPECT_16_9:  display_aspect = 16.0/9.0;  break;
+    case HDMI_ASPECT_5_4:   display_aspect = 5.0/4.0;   break;
+    case HDMI_ASPECT_16_10: display_aspect = 16.0/10.0; break;
+    case HDMI_ASPECT_15_9:  display_aspect = 15.0/9.0;  break;
+    case HDMI_ASPECT_64_27: display_aspect = 64.0/27.0; break;
+    default:                display_aspect = 16.0/9.0;  break;
+  }
+  return display_aspect;
+}
+
+float OMXPlayer::GetDisplayAspectRatio(SDTV_ASPECT_T aspect)
+{
+  float display_aspect;
+  switch (aspect) {
+    case SDTV_ASPECT_4_3:  display_aspect = 4.0/3.0;  break;
+    case SDTV_ASPECT_14_9: display_aspect = 14.0/9.0; break;
+    case SDTV_ASPECT_16_9: display_aspect = 16.0/9.0; break;
+    default:               display_aspect = 4.0/3.0;  break;
+  }
+  return display_aspect;
 }
 
 bool OMXPlayer::InitalizePlayback()
@@ -222,7 +221,6 @@ bool OMXPlayer::InitalizePlayback()
 
 	if (HasAudio())
 	{
-		std::cout << "Opening " << audioDeviceName;
 		if (!_omxPlayerAudio->Open(_audioHints, _omxClock, _omxReader, audioDeviceName, 
 											GetAudioPassthrough(), initialVolume, useHardwareAudio,
 											boostOnDownmix, threadPlayer, audioQueueSize, audioFifoSize))
@@ -271,12 +269,12 @@ float OMXPlayer::DetectAspectRatio()
 	if(_tvState.state & ( VC_HDMI_HDMI | VC_HDMI_DVI ))
 	{
 		//HDMI or DVI on
-		displayAspect = get_display_aspect_ratio((HDMI_ASPECT_T)_tvState.display.hdmi.aspect_ratio);
+		displayAspect = GetDisplayAspectRatio((HDMI_ASPECT_T)_tvState.display.hdmi.aspect_ratio);
 	}
 	else
 	{
 		//composite on
-		displayAspect = get_display_aspect_ratio((SDTV_ASPECT_T)_tvState.display.sdtv.display_options.aspect);
+		displayAspect = GetDisplayAspectRatio((SDTV_ASPECT_T)_tvState.display.sdtv.display_options.aspect);
 	}
 	displayAspect *= (float)_tvState.display.hdmi.height/(float)_tvState.display.hdmi.width;
 	return displayAspect;
@@ -284,13 +282,11 @@ float OMXPlayer::DetectAspectRatio()
 
 bool OMXPlayer::HasAudio()
 {
-	//printf("Audio streams: %d\n", _audioStreamCount);
 	return _audioStreamCount;
 }
 
 bool OMXPlayer::HasVideo()
 {
-	//printf("Video streams: %d\n", _videoStreamCount);
 	return _videoStreamCount;
 }
 

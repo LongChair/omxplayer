@@ -113,6 +113,8 @@ private:
 
 	void PrepareOmx();
 	void TeardownOmx();
+	float GetDisplayAspectRatio(HDMI_ASPECT_T aspect);
+	float GetDisplayAspectRatio(SDTV_ASPECT_T aspect);
 	bool InitalizePlayback();
 	bool ReinitalizeTV();
 	void CleanupPlayback();
