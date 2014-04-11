@@ -279,19 +279,16 @@ bool OMXReader::OpenContext(AVFormatContext *context, bool dump_format)
   AVInputFormat *iformat  = NULL;
   unsigned char *buffer   = NULL;
   unsigned int  flags     = READ_TRUNCATED | READ_BITRATE | READ_CHUNKED;
-printf("defs\n");
+
     m_ioContext = context->pb;
-printf("1\n");
-printf("2\n");
     m_pFormatContext     = context;
-printf("3\n");
     result = 0;
    if(result < 0)
     {
       Close();
       return false;
     }
-printf("open input\n");
+
   // set the interrupt callback, appeared in libavformat 53.15.0
   context->interrupt_callback = int_cb;
 
@@ -314,13 +311,13 @@ printf("open input\n");
     Close();
     return false;
   }
-printf("find streams info\n");
+
   if(!GetStreams())
   {
     Close();
     return false;
   }
-printf("get streams\n");
+
   if(m_pFile)
   {
     int64_t len = m_pFile->GetLength();
@@ -341,7 +338,7 @@ printf("get streams\n");
     m_dllAvFormat.av_dump_format(context, 0, "", 0);
 
   UpdateCurrentPTS();
-printf("update current pts\n");
+
   m_open        = true;
 
   return true;
