@@ -84,7 +84,7 @@ extern "C" DLL_PUBLIC OMXApiState *omx_create();
 	@param state OMX API state.
 	@param cleanupFFMpeg If ffmpeg contexts should be destroyed.
 */
-extern "C" DLL_PUBLIC void omx_destroy(OMXApiState *state, bool cleanupFFmpeg);
+extern "C" DLL_PUBLIC void omx_destroy(OMXApiState *state);
 
 /**
 	Creates an FFMpeg format context for use with custom read and seek functions.

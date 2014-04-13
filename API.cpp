@@ -62,7 +62,7 @@ extern "C" DLL_PUBLIC OMXApiState *omx_create()
 	return state;
 }
 
-extern "C" DLL_PUBLIC void omx_destroy(OMXApiState *state, bool cleanupFFmpeg)
+extern "C" DLL_PUBLIC void omx_destroy(OMXApiState *state)
 {
 	delete state->player;
 	free(state);
@@ -86,7 +86,7 @@ extern "C" DLL_PUBLIC bool omx_create_context(OMXApiState *state, unsigned char 
 	state->formatContext->pb = state->avioContext;
 	state->formatContext->flags |= AVFMT_FLAG_CUSTOM_IO;
 
-	printf("%d", readPacket(0, buffer, bufferSize));
+	readPacket(opaque, buffer, bufferSize);
 	if (seek(0, 0, SEEK_SET) == -1)
 	{
 		state->avioContext->seekable = 0;
