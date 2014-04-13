@@ -92,6 +92,7 @@ extern "C" {
 OMXPlayer::OMXPlayer()
 {
 	_omxPrepped = false;
+	_playbackPrepped = false;
 	_stopPlayback = false;
 	_pausePlayback = false;
 	_isPlaying = false;
@@ -111,25 +112,30 @@ OMXPlayer::~OMXPlayer()
 
 void OMXPlayer::PrepareOmx()
 {
-	_RBP.Initialize();
-	_OMX.Initialize();
+	if (!_omxPrepped)
+	{
+		_RBP.Initialize();
+		_OMX.Initialize();
 
-	_omxClock = new OMXClock();
-	_omxReader = new OMXReader();
-	_omxPlayerVideo = new OMXPlayerVideo();
-	_omxPlayerAudio = new OMXPlayerAudio();
+		_omxClock = new OMXClock();
+		_omxReader = new OMXReader();
+		_omxPlayerVideo = new OMXPlayerVideo();
+		_omxPlayerAudio = new OMXPlayerAudio();
 
-	_omxPrepped = true;
+		_omxPrepped = true;
+	}
 }
 
 void OMXPlayer::TeardownOmx()
 {
 	if (_omxPrepped)
 	{
-		delete _omxPlayerAudio;
-		delete _omxPlayerVideo;
-		delete _omxReader;
+		EnsureStopped();
+
 		delete _omxClock;
+		delete _omxReader;
+		delete _omxPlayerVideo;
+		delete _omxPlayerAudio;
 	
 		_OMX.Deinitialize();
 		_RBP.Deinitialize();
@@ -181,53 +187,57 @@ bool OMXPlayer::InitalizePlayback()
 	int useHardwareAudio = false;
 	bool boostOnDownmix = false;
 
-	_videoStreamCount = _omxReader->VideoStreamCount();
-	_audioStreamCount = _omxReader->AudioStreamCount();
-
-	if (!HasVideo() && !HasAudio())
-		//  file has no streams, can not play
-		return false;
-
-	if (!_omxClock->OMXInitialize(HasVideo(), HasAudio()))
-		//  failed to initalize the OMX media clock
-		return false;
-
-	//  read "hints", ie: stream codec and format information
-	_omxReader->GetHints(OMXSTREAM_AUDIO, _audioHints);
-	_omxReader->GetHints(OMXSTREAM_VIDEO, _videoHints);
-	/*
-		support for selecting audio stream before starting playback
-		if (audioIndex != -1)
-			player->omxReader->SetActiveStream(OMXSTREAM_AUDIO, audioIndex);
-	*/
-	_displayAspect = DetectAspectRatio();
-	if (HasVideo())
+	if (!_playbackPrepped)
 	{
-		if (!_omxPlayerVideo->Open(_videoHints, _omxClock, destRect, deinterlace ? 1 : 0,
-                                         hdmiClockSync, threadPlayer, _displayAspect, videoQueueSize, videoFifoSize))
-			//  failed to open video playback
+		_videoStreamCount = _omxReader->VideoStreamCount();
+		_audioStreamCount = _omxReader->AudioStreamCount();
+
+		if (!HasVideo() && !HasAudio())
+			//  file has no streams, can not play
 			return false;
-	}
 
-	audioDeviceName = GetAudioOutputDevice();
-
-	//  disable audio passthrough if the HDMI receiver doesn't support AC3 or DTS
-	if ((_audioHints.codec == CODEC_ID_AC3 || _audioHints.codec == CODEC_ID_EAC3) &&
-		_bcmHost.vc_tv_hdmi_audio_supported(EDID_AudioFormat_eAC3, 2, EDID_AudioSampleRate_e44KHz, EDID_AudioSampleSize_16bit) != 0)
-		SetAudioPassthrough(false);
-	if (_audioHints.codec == CODEC_ID_DTS &&
-		_bcmHost.vc_tv_hdmi_audio_supported(EDID_AudioFormat_eDTS, 2, EDID_AudioSampleRate_e44KHz, EDID_AudioSampleSize_16bit) != 0)
-		SetAudioPassthrough(false);
-
-	if (HasAudio())
-	{
-		if (!_omxPlayerAudio->Open(_audioHints, _omxClock, _omxReader, audioDeviceName, 
-											GetAudioPassthrough(), initialVolume, useHardwareAudio,
-											boostOnDownmix, threadPlayer, audioQueueSize, audioFifoSize))
-			//  failed to open audio playback
+		if (!_omxClock->OMXInitialize(HasVideo(), HasAudio()))
+			//  failed to initalize the OMX media clock
 			return false;
-	}
 
+		//  read "hints", ie: stream codec and format information
+		_omxReader->GetHints(OMXSTREAM_AUDIO, _audioHints);
+		_omxReader->GetHints(OMXSTREAM_VIDEO, _videoHints);
+		/*
+			support for selecting audio stream before starting playback
+			if (audioIndex != -1)
+				player->omxReader->SetActiveStream(OMXSTREAM_AUDIO, audioIndex);
+		*/
+		_displayAspect = DetectAspectRatio();
+		if (HasVideo())
+		{
+			if (!_omxPlayerVideo->Open(_videoHints, _omxClock, destRect, deinterlace ? 1 : 0,
+											 hdmiClockSync, threadPlayer, _displayAspect, videoQueueSize, videoFifoSize))
+				//  failed to open video playback
+				return false;
+		}
+
+		audioDeviceName = GetAudioOutputDevice();
+
+		//  disable audio passthrough if the HDMI receiver doesn't support AC3 or DTS
+		if ((_audioHints.codec == CODEC_ID_AC3 || _audioHints.codec == CODEC_ID_EAC3) &&
+			_bcmHost.vc_tv_hdmi_audio_supported(EDID_AudioFormat_eAC3, 2, EDID_AudioSampleRate_e44KHz, EDID_AudioSampleSize_16bit) != 0)
+			SetAudioPassthrough(false);
+		if (_audioHints.codec == CODEC_ID_DTS &&
+			_bcmHost.vc_tv_hdmi_audio_supported(EDID_AudioFormat_eDTS, 2, EDID_AudioSampleRate_e44KHz, EDID_AudioSampleSize_16bit) != 0)
+			SetAudioPassthrough(false);
+
+		if (HasAudio())
+		{
+			if (!_omxPlayerAudio->Open(_audioHints, _omxClock, _omxReader, audioDeviceName, 
+												GetAudioPassthrough(), initialVolume, useHardwareAudio,
+												boostOnDownmix, threadPlayer, audioQueueSize, audioFifoSize))
+				//  failed to open audio playback
+				return false;
+		}
+
+		_playbackPrepped = true;
+	}
 	return true;
 }
 
@@ -249,15 +259,21 @@ bool OMXPlayer::ReinitalizeTV()
 
 void OMXPlayer::CleanupPlayback()
 {
-	_omxClock->OMXStop();
-	_omxClock->OMXStateIdle();
-	_omxClock->OMXStateExecute();
+	if (_playbackPrepped)
+	{
+		EnsureStopped();
 
-	_omxPlayerVideo->Close();
-	_omxPlayerAudio->Close();
-	
-	_omxReader->Close();
-	_omxClock->OMXDeinitialize();
+		_omxClock->OMXStop();
+		_omxClock->OMXStateIdle();
+		_omxClock->OMXStateExecute();
+
+		_omxPlayerVideo->Close();
+		_omxPlayerAudio->Close();
+		_omxReader->Close();
+		_omxClock->OMXDeinitialize();
+
+		_playbackPrepped = false;
+	}
 }
 
 float OMXPlayer::DetectAspectRatio()
@@ -427,15 +443,18 @@ bool OMXPlayer::Play()
 			}
 		}
 	}
-	_isPlaying = false;
 
 	if(packet)
 	{
 		_omxReader->FreePacket(packet);
 		packet = NULL;
 	}
+
+	_isPlaying = false;
+
 	CleanupPlayback();
 	TeardownOmx();
+
 	return true;
 }
 
@@ -455,9 +474,22 @@ void OMXPlayer::Pause()
     }
 }
 
+void OMXPlayer::EnsureStopped()
+{
+	_stopPlayback = true;
+	while(_isPlaying)
+	{
+		OMXClock::OMXSleep(10);
+	}
+}
+
 void OMXPlayer::Stop()
 {
 	_stopPlayback = true;
+	while(_isPlaying || _omxPrepped || _playbackPrepped)
+	{
+		OMXClock::OMXSleep(10);
+	}
 }
 
 bool OMXPlayer::IsPaused()

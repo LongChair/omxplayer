@@ -87,6 +87,7 @@ private:
 	int64_t (*_seek)(void *opaque, int64_t offset, int whence);
 	
 	bool _omxPrepped;
+	bool _playbackPrepped;
 	bool _stopPlayback;
 	bool _pausePlayback;
 	bool _isPlaying;
@@ -119,6 +120,8 @@ private:
 	bool ReinitalizeTV();
 	void CleanupPlayback();
 	float DetectAspectRatio();
+
+	void EnsureStopped();
 
 	/**
 		Performs a flush on all playing streams.
