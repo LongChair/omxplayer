@@ -54,12 +54,12 @@ extern "C" {
 
 extern "C" DLL_PUBLIC OMXApiState *omx_create()
 {
-	OMXApiState *player = (OMXApiState*)malloc(sizeof(OMXApiState));
-	player->avioContext = NULL;
-	player->formatContext = NULL;
-	player->inputFormat = NULL;
-	player->player = new OMXPlayer();
-	return player;
+	OMXApiState *state = (OMXApiState*)malloc(sizeof(OMXApiState));
+	state->avioContext = NULL;
+	state->formatContext = NULL;
+	state->inputFormat = NULL;
+	state->player = new OMXPlayer();
+	return state;
 }
 
 extern "C" DLL_PUBLIC void omx_destroy(OMXApiState *state, bool cleanupFFmpeg)
@@ -101,8 +101,6 @@ extern "C" DLL_PUBLIC bool omx_create_context(OMXApiState *state, unsigned char 
 		return false;
 	}
 	state->formatContext->iformat = format;
-	
-	avformat_open_input(&state->formatContext, "", 0, 0);
 
 	return true;
 }
@@ -116,6 +114,7 @@ extern "C" DLL_PUBLIC bool omx_play(OMXApiState *state, char *file)
 
 extern "C" DLL_PUBLIC bool omx_play_context(OMXApiState *state)
 {
+	avformat_open_input(&state->formatContext, "", 0, 0);
 	if (!state->player->OpenContext(state->formatContext))
 		return false;
 	return state->player->Play();
